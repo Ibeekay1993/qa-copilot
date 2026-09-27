@@ -2,3 +2,4 @@
 verify_jwt = true
 [functions.transcribe]
 verify_jwt = true
+\n[functions.weekly-analysis]\nverify_jwt = true\n
