@@ -1,2 +1,37 @@
 import type {Evaluation,InputMode,Message} from '../types/qa';
-export function demoEvaluation(mode:InputMode,messages:Message[]):Evaluation{return {id:crypto.randomUUID(),inputMode:mode,messages,ticketId:'DEMO-001',agentName:'Demo Agent',issue:'Customer requested help with a support issue.',outcome:'The interaction appears to have reached a reasonable resolution, subject to human verification.',overallScore:88,criticalErrors:[],coaching:['Acknowledge the customer’s concern explicitly before moving into troubleshooting.'],criteria:[{id:'accuracy',name:'Accuracy',score:19,maxScore:20,finding:'Information provided appears consistent with the conversation.',evidence:messages.slice(0,2).map(m=>m.text),confidence:'medium'},{id:'resolution',name:'Resolution',score:18,maxScore:20,finding:'The customer’s stated objective appears to have been addressed.',evidence:messages.slice(-2).map(m=>m.text),confidence:'medium'},{id:'process',name:'Process adherence',score:17,maxScore:20,finding:'No clear process breach was detected from the supplied material.',evidence:[],confidence:'medium'},{id:'communication',name:'Communication',score:17,maxScore:20,finding:'Communication is generally clear, with room for stronger acknowledgement.',evidence:messages.filter(m=>m.role==='agent').slice(0,2).map(m=>m.text),confidence:'medium'},{id:'empathy',name:'Empathy',score:8,maxScore:10,finding:'The interaction could acknowledge customer frustration more directly.',evidence:messages.filter(m=>m.role==='customer').slice(0,1).map(m=>m.text),confidence:'medium'},{id:'ownership',name:'Ownership',score:9,maxScore:10,finding:'The agent demonstrates reasonable ownership based on available evidence.',evidence:[],confidence:'low'}],createdAt:new Date().toISOString()};}
+
+const criteria=[
+ ['complete_correct_information','Complete / Correct Information & Solution',5,true,'yes',5],
+ ['customer_service_etiquette','Customer Service Etiquette',5,true,'yes',5],
+ ['resolution','Resolution',5,true,'yes',5],
+ ['interaction_documentation','Interaction Documentation',5,true,'yes',5],
+ ['customer_verification','Customer Verification',10,true,'na',0],
+ ['opening_greeting','Opening Greeting',5,false,'5',5],
+ ['closing_greeting','Closing Greeting',5,false,'5',5],
+ ['professionalism','Professionalism',10,false,'10',10],
+ ['query_understanding_investigation','Query Understanding & Investigation',20,false,'20',20],
+ ['value_addition','Value Addition',10,false,'na',0],
+ ['relationship_building','Relationship Building',20,false,'15',15]
+] as const;
+
+export function demoEvaluation(mode:InputMode,messages:Message[]):Evaluation{
+ const mapped=criteria.map(([id,name,max,critical,answer,score])=>({
+   id,name,maxScore:max,critical,answer,score,
+   finding:'Demo result only. Connect the QA Copilot Supabase project to run the official scorecard.',
+   evidence:messages.slice(0,2).map(m=>m.text),
+   confidence:'low' as const,
+   infractions:[]
+ }));
+ const applicable=mapped.filter(c=>c.answer!=='na');
+ const raw=applicable.reduce((n,c)=>n+c.score,0);
+ const max=applicable.reduce((n,c)=>n+c.maxScore,0);
+ return {
+   id:crypto.randomUUID(),inputMode:mode,messages,ticketId:'DEMO-001',
+   issue:'Demo evaluation — not a production QA result.',
+   outcome:'Connect the configured analysis function for a real evidence-based evaluation.',
+   overallScore:max?Math.round(raw/max*100):0,status:'needs_review',aiScore:max?Math.round(raw/max*100):0,
+   criticalErrors:[],coaching:['Connect the QA Copilot analysis service before using this result for QA decisions.'],
+   positiveFeedback:[],impact:[],feedback:'Demo result only.',infractions:[],criteria:mapped,
+   createdAt:new Date().toISOString()
+ };
+}
