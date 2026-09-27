@@ -27,6 +27,30 @@ async function aiAnalyse(messages:Message[],images:string[]=[],mode:InputMode='p
  return {...data,id:crypto.randomUUID(),inputMode:mode,messages,createdAt:new Date().toISOString()} as Evaluation;
 }
 
+async function persistEvaluation(evaluation:Evaluation){
+ if(!supabase)return;
+ const {data:{user}}=await supabase.auth.getUser();
+ if(!user)return;
+ const {error}=await supabase.from('qa_evaluations').upsert({
+   id:evaluation.id,user_id:user.id,input_mode:evaluation.inputMode,ticket_id:evaluation.ticketId||null,
+   agent_name:evaluation.agentName||null,issue:evaluation.issue,outcome:evaluation.outcome,
+   overall_ai_score:evaluation.aiScore??evaluation.overallScore,overall_final_score:evaluation.finalScore??null,
+   status:'draft',ai_status:evaluation.status,applicable_score:(evaluation as any).applicableScore??null,
+   applicable_max_score:(evaluation as any).applicableMaxScore??null,positive_feedback:evaluation.positiveFeedback||[],
+   impact:evaluation.impact||[],recommendation:evaluation.coaching||[],infractions:evaluation.infractions||[],
+   feedback:evaluation.feedback||null,scorecard_version:(evaluation as any).scorecardVersion||'2026-09'
+ });
+ if(error)throw error;
+ await supabase.from('qa_criteria_results').delete().eq('evaluation_id',evaluation.id);
+ const {error:criteriaError}=await supabase.from('qa_criteria_results').insert(evaluation.criteria.map(c=>({
+   evaluation_id:evaluation.id,criterion_key:c.id,criterion_name:c.name,ai_score:c.score,final_score:c.finalScore??null,
+   max_score:c.maxScore,finding:c.finding,evidence:c.evidence,policy_reference:c.policyReference||null,
+   confidence:c.confidence,answer:c.answer,critical:c.critical,infractions:c.infractions||[],
+   overridden:c.overridden||false,override_reason:c.overrideReason||null
+ })));
+ if(criteriaError)throw criteriaError;
+}
+
 async function transcribe(blob:Blob){
  if(!supabase)return null;
  const form=new FormData(); form.append('file',blob,'qa-call.webm');
@@ -93,7 +117,7 @@ export default function App(){
        stopCamera();
      }
      const result=await aiAnalyse(messages,mode==='camera'?frames:[],mode);
-     setEvaluation(result||demoEvaluation(mode,messages));
+     const evaluationResult=result||demoEvaluation(mode,messages); setEvaluation(evaluationResult); try{await persistEvaluation(evaluationResult)}catch{setError('Evaluation completed, but saving the review history failed. The result is still available on screen.');}
    }catch(e){setError(e instanceof Error?e.message:'Review failed');setEvaluation(undefined)}
    finally{setBusy(false)}
  }
@@ -111,7 +135,7 @@ export default function App(){
      setText(transcript);
      const messages=parseText(transcript);
      const result=await aiAnalyse(messages,[],mode);
-     setEvaluation(result||demoEvaluation(mode,messages));
+     const evaluationResult=result||demoEvaluation(mode,messages); setEvaluation(evaluationResult); try{await persistEvaluation(evaluationResult)}catch{setError('Evaluation completed, but saving the review history failed. The result is still available on screen.');}
    }catch(e){setError(e instanceof Error?e.message:'Audio review failed');setEvaluation(undefined)}
    finally{setBusy(false)}
  }
