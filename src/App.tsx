@@ -79,6 +79,8 @@ export default function App(){
  const [elapsed,setElapsed]=useState(0);
  const [userReady,setUserReady]=useState(false);
  const [error,setError]=useState('');
+ const [weekly,setWeekly]=useState<any>(null);
+ const [weeklyBusy,setWeeklyBusy]=useState(false);
 
  useEffect(()=>{
    let alive=true;
@@ -97,6 +99,14 @@ export default function App(){
    return()=>window.clearInterval(timer);
  },[recording,paused]);
 
+
+ async function runWeeklyAnalysis(){
+  if(!supabase)return;
+  setWeeklyBusy(true);setError('');
+  try{const {data,error}=await supabase.functions.invoke('weekly-analysis');if(error)throw error;setWeekly(data)}
+  catch(e){setError(e instanceof Error?e.message:'Weekly analysis failed')}
+  finally{setWeeklyBusy(false)}
+ }
  async function beginCamera(){
    try{setError('');if(!video.current)return;stream.current=await startCamera(video.current);setCameraOn(true)}
    catch(e){setError(e instanceof Error?e.message:'Camera permission failed.')}
@@ -156,12 +166,12 @@ export default function App(){
    <section className="hero"><span className="eyebrow">Customer support QA</span><h2>Review conversations without touching the company system.</h2><p>Use Listen or Camera as your primary workflow. Paste remains available when a transcript is permitted.</p></section>
    <section className="modes">{modes.map(([id,title,desc,Icon])=><button className="mode" key={id} onClick={()=>{setMode(id);setEvaluation(undefined)}} style={{textAlign:'left',outline:mode===id?'2px solid #687cff':'none'}}><div className="icon"><Icon size={22}/></div><h3>{title}</h3><p>{desc}</p></button>)}</section>
    <section className="workspace">
-    <div className="workspace-head"><div><span className="eyebrow">{mode} mode</span><h3>{mode==='paste'?'Paste conversation':mode==='listen'?'Listen to a call':'Capture the screen'}</h3></div>{evaluation&&<button className="secondary" onClick={()=>{setEvaluation(undefined);setFrames([]);setText('');setElapsed(0)}}><RotateCcw size={15}/> New review</button>}</div>
+    <div className="workspace-head"><div><span className="eyebrow">{mode} mode</span><h3>{mode==='paste'?'Paste conversation':mode==='listen'?'Listen to a call':'Capture the screen'}</h3></div><div className="actions">{evaluation&&<button className="secondary" onClick={()=>{setEvaluation(undefined);setFrames([]);setText('');setElapsed(0)}}><RotateCcw size={15}/> New review</button>}<button className="secondary" disabled={weeklyBusy||!supabase} onClick={runWeeklyAnalysis}>{weeklyBusy?<><LoaderCircle size={15}/> Analysing week…</>:'Weekly analysis'}</button></div></div>
     {mode==='paste'&&<><textarea className="textarea" value={text} onChange={e=>setText(e.target.value)} placeholder={'Customer: I have been waiting for my transfer...\nAgent: I’m sorry about the delay. Let me check this for you...'} /><div className="actions"><button className="primary" disabled={!text.trim()||busy} onClick={analyse}>{busy?<><LoaderCircle size={15}/> Analysing…</>:'Analyse conversation'}</button></div></>}
     {mode==='camera'&&<div className="camera"><video ref={video} muted playsInline/><div className="actions">{!cameraOn?<button className="primary" onClick={beginCamera}><Camera size={16}/> Start camera</button>:<><button className="secondary" onClick={capture}><Camera size={16}/> Capture frame</button><button className="secondary" onClick={stopCamera}><StopCircle size={16}/> Stop</button></>}<button className="primary" disabled={frames.length===0||busy||cameraOn} onClick={analyse}>{busy?'Processing…':'Done — review'}</button></div><div className="preview-strip">{frames.map((f,i)=><img className="thumb" src={f} key={i} alt={`Captured segment ${i+1}`}/>)}</div><p className="muted">Capture each new screen position. Near-duplicate frames are ignored so the same screen is not repeatedly sent for analysis.</p></div>}
     {mode==='listen'&&<div><div className="card"><strong>Full-call audio review</strong><p className="muted">Start listening, play the permitted call aloud near the phone, pause if needed, and stop when the call ends. There is no fixed recording duration in the interface.</p><div className="timer">{formatElapsed(elapsed)}</div></div><div className="actions">{!recording&&!busy&&<button className="primary" onClick={startListening}><Mic size={16}/> Start listening</button>}{recording&&<><button className="secondary" onClick={togglePause}>{paused?<><Play size={16}/> Resume</>:<><Pause size={16}/> Pause</>}</button><button className="primary" onClick={stopListening}><StopCircle size={16}/> Stop & analyse</button></>}{busy&&<button className="primary" disabled><LoaderCircle size={15}/> Transcribing and analysing…</button>}</div></div>}
     {error&&<div className="card warning" style={{marginTop:14}}><strong>Could not complete review</strong><div className="evidence">{error}</div></div>}
-    {evaluation&&<ResultPanel evaluation={evaluation}/>}
+    {evaluation&&<ResultPanel evaluation={evaluation}/>}{weekly&&<section className="result"><div className="workspace-head"><div><span className="eyebrow">Last 7 days</span><h3>Weekly Analysis</h3></div><strong>{weekly.totalEvaluations||0} evaluations</strong></div><div className="grid"><article className="card"><strong>Trending Infractions</strong>{(weekly.trendingInfractions||[]).map((x:any)=><div className="evidence" key={x.name}>• {x.name}: {x.count}</div>)}</article><article className="card"><strong>Trending Issues</strong>{(weekly.trendingIssues||[]).map((x:any,i:number)=><div className="evidence" key={i}>• {x.issue} ({x.frequency})</div>)}</article><article className="card"><strong>Team Coaching</strong>{(weekly.teamRecommendations||[]).map((x:string)=><div className="evidence" key={x}>• {x}</div>)}</article></div></section>}
    </section>
   </main>
   <footer className="footer">Final scoring remains under human QA control. Capture audio, screens, and SOP pages only where your organisation permits it.</footer>
