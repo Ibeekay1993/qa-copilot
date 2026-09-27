@@ -40,7 +40,7 @@ export interface CriterionResult {
   policyReference?:string;
   confidence:'high'|'medium'|'low';
   infractions?:string[];
-  overridden?:boolean;
+  finalScore?:number;\n  overridden?:boolean;
   overrideReason?:string;
 }
 
